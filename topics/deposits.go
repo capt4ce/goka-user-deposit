@@ -2,78 +2,123 @@ package topics
 
 import (
 	"context"
+	"errors"
 	"log"
-	"os"
-	"os/signal"
-	"syscall"
 
+	"github.com/capt4ce/goka-user-deposit/model"
 	"github.com/lovoo/goka"
-	"github.com/lovoo/goka/codec"
+	"google.golang.org/protobuf/proto"
 )
 
 var (
-	Brokers                   = []string{"localhost:9092"}
-	DepositStream goka.Stream = "deposits"
-	group         goka.Group  = "balance"
+	DepositStream    goka.Stream = "deposits"
+	BalanceGroup     goka.Group  = "balance"
+	BalanceTable     goka.Table  = goka.GroupTable(BalanceGroup)
+	DepositFlagGroup goka.Group  = "aboveThreshold"
+	DepositFlagTable goka.Table  = goka.GroupTable(DepositFlagGroup)
 )
 
 type TopicDeposits struct {
+	brokers         []string
+	depositView     *goka.View
+	depositFlagView *goka.View
 }
 
-func (*TopicDeposits) Emit() {
-	emitter, err := goka.NewEmitter(Brokers, DepositStream, new(codec.String))
+func NewTopicDeposits(brokers []string) *TopicDeposits {
+	depositView, err := goka.NewView(brokers, BalanceTable, new(DepositArrayCodec))
+	if err != nil {
+		panic(err)
+	}
+	go depositView.Run(context.Background())
+
+	depositFlagView, err := goka.NewView(brokers, DepositFlagTable, new(DepositFlagCodec))
+	if err != nil {
+		panic(err)
+	}
+	go depositView.Run(context.Background())
+	return &TopicDeposits{
+		brokers:         brokers,
+		depositView:     depositView,
+		depositFlagView: depositFlagView,
+	}
+}
+
+func (td *TopicDeposits) Emit(walletId string, deposit *model.Deposit) error {
+	emitter, err := goka.NewEmitter(td.brokers, DepositStream, new(DepositCodec))
 	if err != nil {
 		log.Fatalf("error creating emitter: %v", err)
 	}
 	defer emitter.Finish()
-	err = emitter.EmitSync("some-key", "some-value")
-	if err != nil {
-		log.Fatalf("error emitting message: %v", err)
-	}
+	err = emitter.EmitSync(walletId, deposit)
+	return err
 }
 
-func (*TopicDeposits) RunProcessor() {
-	// process callback is invoked for each message delivered from
-	// "example-stream" topic.
-	cb := func(ctx goka.Context, msg interface{}) {
-		var counter int64
-		// ctx.Value() gets from the group table the value that is stored for
-		// the message's key.
-		if val := ctx.Value(); val != nil {
-			counter = val.(int64)
-		}
-		counter++
-		// SetValue stores the incremented counter in the group table for in
-		// the message's key.
-		ctx.SetValue(counter)
-		log.Printf("key = %s, counter = %v, msg = %v", ctx.Key(), counter, msg)
-	}
+func (td *TopicDeposits) GenerateListener(ctx context.Context, groupName goka.Group, groupFunctions []goka.Edge) error {
 
-	// Define a new processor group. The group defines all inputs, outputs, and
-	// serialization formats. The group-table topic is "example-group-table".
-	g := goka.DefineGroup(group,
-		goka.Input(DepositStream, new(codec.String), cb),
-		goka.Persist(new(codec.Int64)),
+	gokaGroup := goka.DefineGroup(groupName,
+		groupFunctions...,
 	)
-
-	p, err := goka.NewProcessor(Brokers, g)
+	p, err := goka.NewProcessor(td.brokers, gokaGroup)
 	if err != nil {
-		log.Fatalf("error creating processor: %v", err)
+		return err
 	}
-	ctx, cancel := context.WithCancel(context.Background())
-	done := make(chan bool)
-	go func() {
-		defer close(done)
-		if err = p.Run(ctx); err != nil {
-			log.Fatalf("error running processor: %v", err)
-		} else {
-			log.Printf("Processor shutdown cleanly")
-		}
-	}()
 
-	wait := make(chan os.Signal, 1)
-	signal.Notify(wait, syscall.SIGINT, syscall.SIGTERM)
-	<-wait   // wait for SIGINT/SIGTERM
-	cancel() // gracefully stop processor
-	<-done
+	return p.Run(ctx)
+}
+
+func (td *TopicDeposits) GetDeposits(walletId string) (*model.DepositArray, error) {
+	val, err := td.depositView.Get(walletId)
+	if err != nil {
+		return nil, err
+	}
+	if val == nil {
+		return nil, errors.New("GetDeposits: key not found")
+	}
+
+	return val.(*model.DepositArray), nil
+}
+
+func (td *TopicDeposits) GetDepositFlag(walletId string) (*model.DepositFlag, error) {
+	val, err := td.depositFlagView.Get(walletId)
+	if err != nil {
+		return nil, err
+	}
+	if val == nil {
+		return nil, errors.New("GetDepositFlag: key not found")
+	}
+
+	return val.(*model.DepositFlag), nil
+}
+
+type DepositCodec struct{}
+
+func (c *DepositCodec) Encode(value interface{}) ([]byte, error) {
+	return proto.Marshal(value.(*model.Deposit))
+}
+
+func (c *DepositCodec) Decode(data []byte) (interface{}, error) {
+	var m model.Deposit
+	return &m, proto.Unmarshal(data, &m)
+}
+
+type DepositArrayCodec struct{}
+
+func (c *DepositArrayCodec) Encode(value interface{}) ([]byte, error) {
+	return proto.Marshal(value.(*model.DepositArray))
+}
+
+func (c *DepositArrayCodec) Decode(data []byte) (interface{}, error) {
+	var m model.DepositArray
+	return &m, proto.Unmarshal(data, &m)
+}
+
+type DepositFlagCodec struct{}
+
+func (c *DepositFlagCodec) Encode(value interface{}) ([]byte, error) {
+	return proto.Marshal(value.(*model.DepositFlag))
+}
+
+func (c *DepositFlagCodec) Decode(data []byte) (interface{}, error) {
+	var m model.DepositFlag
+	return &m, proto.Unmarshal(data, &m)
 }
