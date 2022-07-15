@@ -13,5 +13,5 @@ dep:
 	go mod tidy
 	go mod vendor
 
-dev:
+start:
 	go run main.go
