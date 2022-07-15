@@ -12,18 +12,15 @@ import (
 	"github.com/gorilla/mux"
 )
 
-func Start(port string, topicBrokers []string) func() error {
-	return func() error {
-		topicDeposits := topics.NewTopicDeposits(topicBrokers)
-		balanceService := service.NewBalanceService(topicDeposits)
-		balanceController := controller.NewBalanceController(balanceService)
+func Start(port string, topicDeposits *topics.TopicDeposits) {
+	balanceService := service.NewBalanceService(topicDeposits)
+	balanceController := controller.NewBalanceController(balanceService)
 
-		router := mux.NewRouter()
-		router.HandleFunc("/deposit", balanceController.Deposit).Methods("POST")
-		router.HandleFunc("/check/{wallet_id}", balanceController.GetBalance).Methods("GET")
+	router := mux.NewRouter()
+	router.HandleFunc("/deposit", balanceController.Deposit).Methods("POST")
+	router.HandleFunc("/balance/{wallet_id}", balanceController.GetBalance).Methods("GET")
 
-		log.Printf("Listen port %s", port)
-		log.Fatal(http.ListenAndServe(fmt.Sprintf(":%s", port), router))
-		return nil
-	}
+	log.Printf("Listen port %s", port)
+	log.Fatal(http.ListenAndServe(fmt.Sprintf(":%s", port), router))
+
 }

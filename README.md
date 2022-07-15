@@ -16,5 +16,7 @@ protoc -I=pb --go_out=. pb/*.proto
 ```
 
 ## Running the project
-1. Starting local docker kafka `docker-compose up -d`
-2. Running services `go run main.go`
+1. Starting local docker kafka `make kafka-start`
+2. Crete deposit topics `make kafka-create-topics`
+3. Running services `make dev`
+4. After finished using the app, you can delete the kafka cluster with command `make kafka-stop`

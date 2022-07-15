@@ -3,6 +3,7 @@ package topics
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log"
 
 	"github.com/capt4ce/goka-user-deposit/model"
@@ -29,13 +30,24 @@ func NewTopicDeposits(brokers []string) *TopicDeposits {
 	if err != nil {
 		panic(err)
 	}
-	go depositView.Run(context.Background())
+	go func() {
+		err := depositView.Run(context.Background())
+		if err != nil {
+			fmt.Println("depositsView err:", err)
+		}
+	}()
 
 	depositFlagView, err := goka.NewView(brokers, DepositFlagTable, new(DepositFlagCodec))
 	if err != nil {
 		panic(err)
 	}
-	go depositView.Run(context.Background())
+	go func() {
+		err := depositView.Run(context.Background())
+		if err != nil {
+			fmt.Println("depositFlagView err:", err)
+		}
+	}()
+
 	return &TopicDeposits{
 		brokers:         brokers,
 		depositView:     depositView,
@@ -49,21 +61,21 @@ func (td *TopicDeposits) Emit(walletId string, deposit *model.Deposit) error {
 		log.Fatalf("error creating emitter: %v", err)
 	}
 	defer emitter.Finish()
-	err = emitter.EmitSync(walletId, deposit)
-	return err
+	return emitter.EmitSync(walletId, deposit)
 }
 
-func (td *TopicDeposits) GenerateListener(ctx context.Context, groupName goka.Group, groupFunctions []goka.Edge) error {
+func (td *TopicDeposits) GenerateListener(ctx context.Context, groupName goka.Group, groupFunctions []goka.Edge) func() error {
+	return func() error {
+		gokaGroup := goka.DefineGroup(groupName,
+			groupFunctions...,
+		)
+		p, err := goka.NewProcessor(td.brokers, gokaGroup)
+		if err != nil {
+			return err
+		}
 
-	gokaGroup := goka.DefineGroup(groupName,
-		groupFunctions...,
-	)
-	p, err := goka.NewProcessor(td.brokers, gokaGroup)
-	if err != nil {
-		return err
+		return p.Run(ctx)
 	}
-
-	return p.Run(ctx)
 }
 
 func (td *TopicDeposits) GetDeposits(walletId string) (*model.DepositArray, error) {

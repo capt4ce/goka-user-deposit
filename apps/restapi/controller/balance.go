@@ -2,6 +2,7 @@ package controller
 
 import (
 	"encoding/json"
+	"fmt"
 	"io/ioutil"
 	"net/http"
 
@@ -50,7 +51,7 @@ func (bc *BalanceController) Deposit(w http.ResponseWriter, r *http.Request) {
 		utils.RespondWithError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	utils.RespondWithJSON(w, http.StatusOK, nil)
+	utils.RespondWithJSON(w, http.StatusOK, req)
 }
 
 type getBalanceResponse struct {
@@ -69,6 +70,7 @@ func (bc *BalanceController) GetBalance(w http.ResponseWriter, r *http.Request) 
 	}
 	balance, err := bc.balanceService.GetBalance(walletId)
 	if err != nil {
+		fmt.Println("balance error", err)
 		utils.RespondWithJSON(w, http.StatusOK, response)
 		return
 	}
@@ -76,6 +78,7 @@ func (bc *BalanceController) GetBalance(w http.ResponseWriter, r *http.Request) 
 
 	flag, err := bc.balanceService.GetDepositFlag(walletId)
 	if err != nil {
+		fmt.Println("flag error", err)
 		utils.RespondWithJSON(w, http.StatusOK, response)
 		return
 	}
