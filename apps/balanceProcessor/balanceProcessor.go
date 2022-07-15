@@ -13,7 +13,7 @@ func Start(ctx context.Context, topicDeposits *topics.TopicDeposits) func() erro
 	fmt.Println("starting balanceProcessor...")
 	return topicDeposits.GenerateListener(ctx, topics.BalanceGroup, []goka.Edge{
 		goka.Input(topics.DepositStream, new(topics.DepositCodec), func(ctx goka.Context, msg interface{}) {
-			fmt.Println("balanceProcessor: receiving topic")
+			fmt.Println("balanceProcessor: receiving topic", fmt.Sprintf("%+v", msg))
 			deposit := msg.(*model.Deposit)
 			depositArray := &model.DepositArray{}
 			if v := ctx.Value(); v != nil {

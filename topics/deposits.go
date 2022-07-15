@@ -42,7 +42,7 @@ func NewTopicDeposits(brokers []string) *TopicDeposits {
 		panic(err)
 	}
 	go func() {
-		err := depositView.Run(context.Background())
+		err := depositFlagView.Run(context.Background())
 		if err != nil {
 			fmt.Println("depositFlagView err:", err)
 		}
@@ -61,7 +61,11 @@ func (td *TopicDeposits) Emit(walletId string, deposit *model.Deposit) error {
 		log.Fatalf("error creating emitter: %v", err)
 	}
 	defer emitter.Finish()
-	return emitter.EmitSync(walletId, deposit)
+	err = emitter.EmitSync(walletId, deposit)
+	if err != nil {
+		fmt.Println("error emitting")
+	}
+	return err
 }
 
 func (td *TopicDeposits) GenerateListener(ctx context.Context, groupName goka.Group, groupFunctions []goka.Edge) func() error {
@@ -71,10 +75,17 @@ func (td *TopicDeposits) GenerateListener(ctx context.Context, groupName goka.Gr
 		)
 		p, err := goka.NewProcessor(td.brokers, gokaGroup)
 		if err != nil {
+			fmt.Println("Error new processor", err)
 			return err
 		}
 
-		return p.Run(ctx)
+		err = p.Run(ctx)
+		if err != nil {
+			fmt.Println("Error run processor", err)
+			return err
+		}
+
+		return err
 	}
 }
 
