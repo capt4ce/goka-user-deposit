@@ -18,7 +18,7 @@ func Start(port string, topicDeposits *topics.TopicDeposits) {
 
 	router := mux.NewRouter()
 	router.HandleFunc("/deposit", balanceController.Deposit).Methods("POST")
-	router.HandleFunc("/balance/{wallet_id}", balanceController.GetBalance).Methods("GET")
+	router.HandleFunc("/details", balanceController.GetBalance).Methods("GET")
 
 	log.Printf("Listen port %s", port)
 	log.Fatal(http.ListenAndServe(fmt.Sprintf(":%s", port), router))

@@ -8,7 +8,6 @@ import (
 
 	"github.com/capt4ce/goka-user-deposit/apps/restApi/service"
 	"github.com/capt4ce/goka-user-deposit/apps/restApi/utils"
-	"github.com/gorilla/mux"
 )
 
 type BalanceController struct {
@@ -24,6 +23,10 @@ func NewBalanceController(balanceService *service.BalanceService) *BalanceContro
 type depositRequest struct {
 	WalletId string  `json:"wallet_id"`
 	Amount   float32 `json:"amount"`
+}
+
+type detailsRequest struct {
+	WalletId string `json:"wallet_id"`
 }
 
 func (bc *BalanceController) Deposit(w http.ResponseWriter, r *http.Request) {
@@ -55,16 +58,28 @@ func (bc *BalanceController) Deposit(w http.ResponseWriter, r *http.Request) {
 }
 
 type getBalanceResponse struct {
-	WalletId       string  `json:"wallet_id"`
 	Balance        float32 `json:"balance"`
 	AboveThreshold bool    `json:"above_threshold"`
 }
 
 func (bc *BalanceController) GetBalance(w http.ResponseWriter, r *http.Request) {
-	walletId := mux.Vars(r)["wallet_id"]
+	var req detailsRequest
+
+	b, err := ioutil.ReadAll(r.Body)
+	if err != nil {
+		utils.RespondWithError(w, http.StatusUnprocessableEntity, err.Error())
+		return
+	}
+
+	err = json.Unmarshal(b, &req)
+	if err != nil {
+		utils.RespondWithError(w, http.StatusUnprocessableEntity, err.Error())
+		return
+	}
+
+	walletId := req.WalletId
 
 	response := getBalanceResponse{
-		WalletId:       walletId,
 		Balance:        0,
 		AboveThreshold: false,
 	}
